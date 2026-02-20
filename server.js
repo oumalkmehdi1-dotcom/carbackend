@@ -5,7 +5,7 @@ import cors from 'cors';
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Activer CORS pour le front-end
+
 app.use(cors());
 app.use(express.json());
 
