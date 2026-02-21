@@ -1,41 +1,72 @@
-// server.js
-import express from 'express';
-import cors from 'cors';
+import express from "express";
+import cors from "cors";
+import sql from "mssql";
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-
 app.use(cors());
 app.use(express.json());
 
-// Données simulées pour les voitures
-const cars = [
-  { brand: "Toyota", models: ["Corolla", "Yaris", "Land Cruiser", "Rav4"] },
-  { brand: "Renault", models: ["Clio", "Megane", "Captur", "Duster"] },
-  { brand: "Peugeot", models: ["208", "308", "3008", "5008"] },
-  { brand: "Ford", models: ["Fiesta", "Focus", "Mustang", "Explorer"] },
-  { brand: "Hyundai", models: ["i10", "i20", "Tucson", "Santa Fe"] },
-  { brand: "Mercedes-Benz", models: ["Classe A", "Classe C", "GLC", "GLE"] },
-  { brand: "BMW", models: ["Série 1", "Série 3", "X3", "X5"] },
-  { brand: "Nissan", models: ["Micra", "Qashqai", "X-Trail", "Patrol"] },
-  { brand: "Kia", models: ["Picanto", "Rio", "Sportage", "Sorento"] },
-  { brand: "Volkswagen", models: ["Polo", "Golf", "Tiguan", "Passat"] }
-];
+// ✅ Connection string from Azure App Service Configuration
+const connStr = process.env.SQL_CONNECTION_STRING;
 
-// GET /api/cars → toutes les marques
-app.get('/api/cars', (req, res) => {
-  res.json(cars);
+async function getPool() {
+  if (!connStr) throw new Error("SQL_CONNECTION_STRING is missing");
+  return await sql.connect(connStr);
+}
+
+// ✅ Helper: brands + models (strings)
+async function fetchCarsNamesOnly() {
+  const pool = await getPool();
+  const result = await pool.request().query(
+    "SELECT brand, model FROM Cars ORDER BY brand, model;"
+  );
+
+  const map = new Map();
+  for (const row of result.recordset) {
+    if (!map.has(row.brand)) map.set(row.brand, []);
+    map.get(row.brand).push(row.model);
+  }
+
+  return Array.from(map.entries()).map(([brand, models]) => ({ brand, models }));
+}
+
+// ✅ Helper: brands + models with pricePerDay
+async function fetchCarsWithPrices() {
+  const pool = await getPool();
+  const result = await pool.request().query(
+    "SELECT brand, model, price AS pricePerDay FROM Cars ORDER BY brand, model;"
+  );
+
+  const map = new Map();
+  for (const row of result.recordset) {
+    if (!map.has(row.brand)) map.set(row.brand, []);
+    map.get(row.brand).push({ name: row.model, pricePerDay: row.pricePerDay });
+  }
+
+  return Array.from(map.entries()).map(([brand, models]) => ({ brand, models }));
+}
+
+// ✅ GET /api/cars
+app.get("/api/cars", async (req, res) => {
+  try {
+    const data = await fetchCarsNamesOnly();
+    res.json(data);
+  } catch (err) {
+    console.error("DB error:", err);
+    res.status(500).json({ error: "Database error", details: err.message });
+  }
 });
 
-// GET /api/cars/:brand → marque spécifique
-app.get('/api/cars/:brand', (req, res) => {
-  const brandName = req.params.brand.toLowerCase();
-  const car = cars.find(c => c.brand.toLowerCase() === brandName);
-  if (car) {
-    res.json(car);
-  } else {
-    res.status(404).json({ message: "Marque non trouvée" });
+// ✅ GET /api/cars-prices
+app.get("/api/cars-prices", async (req, res) => {
+  try {
+    const data = await fetchCarsWithPrices();
+    res.json(data);
+  } catch (err) {
+    console.error("DB error:", err);
+    res.status(500).json({ error: "Database error", details: err.message });
   }
 });
 
