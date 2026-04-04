@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Car Rental — Browse & Reserve</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-brand">🚗 Car Rental</div>
+    <div class="nav-links">
+      <a href="/" class="active">Browse Cars</a>
+      <a href="/admin.html">Admin Panel</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h1>Available Cars</h1>
+    <p class="subtitle">Choose a car and make your reservation</p>
+
+    <!-- Cars Grid -->
+    <div id="cars-grid" class="cars-grid">
+      <p class="loading">Loading cars...</p>
+    </div>
+
+    <!-- Reservation Modal -->
+    <div id="modal" class="modal hidden">
+      <div class="modal-content">
+        <button class="modal-close" id="modal-close">&times;</button>
+        <h2>Make a Reservation</h2>
+        <p id="selected-car-name" class="selected-car"></p>
+
+        <form id="reservation-form">
+          <input type="hidden" id="car-id">
+
+          <div class="form-group">
+            <label for="customer-name">Full Name</label>
+            <input type="text" id="customer-name" placeholder="e.g. John Doe" required maxlength="100">
+          </div>
+
+          <div class="form-group">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" placeholder="e.g. +33 6 12 34 56 78" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="start-date">Start Date</label>
+              <input type="date" id="start-date" required>
+            </div>
+            <div class="form-group">
+              <label for="end-date">End Date</label>
+              <input type="date" id="end-date" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Confirm Reservation</button>
+        </form>
+
+        <div id="reservation-message" class="message hidden"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ============================================================
+    // User Interface — Browse Cars & Make Reservations
+    // ============================================================
+
+    const API = '';  // Same origin, no prefix needed
+
+    // --- Load and display all cars ---
+    async function loadCars() {
+      const grid = document.getElementById('cars-grid');
+      try {
+        const response = await fetch(`${API}/api/cars`);
+        const cars = await response.json();
+
+        if (cars.length === 0) {
+          grid.innerHTML = '<p class="empty">No cars available yet. Ask the admin to add some!</p>';
+          return;
+        }
+
+        grid.innerHTML = cars.map(car => `
+          <div class="car-card">
+            ${car.image_url 
+              ? `<img class="car-image" src="${escapeHtml(car.image_url)}" alt="${escapeHtml(car.brand)} ${escapeHtml(car.model)}">`
+              : `<div class="car-icon">🚗</div>`
+            }
+            <h3>${escapeHtml(car.brand)}</h3>
+            <p class="car-model">${escapeHtml(car.model)}</p>
+            <button class="btn btn-reserve" onclick="openReservation(${car.id}, '${escapeHtml(car.brand)}', '${escapeHtml(car.model)}')">
+              Reserve
+            </button>
+          </div>
+        `).join('');
+      } catch (err) {
+        grid.innerHTML = '<p class="error">Failed to load cars. Is the server running?</p>';
+        console.error(err);
+      }
+    }
+
+    // --- Open reservation modal ---
+    function openReservation(carId, brand, model) {
+      document.getElementById('car-id').value = carId;
+      document.getElementById('selected-car-name').textContent = `${brand} ${model}`;
+      document.getElementById('reservation-form').reset();
+      document.getElementById('car-id').value = carId; // re-set after reset
+      document.getElementById('reservation-message').classList.add('hidden');
+
+      // Set minimum date to today
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('start-date').min = today;
+      document.getElementById('end-date').min = today;
+
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    // --- Close modal ---
+    document.getElementById('modal-close').addEventListener('click', () => {
+      document.getElementById('modal').classList.add('hidden');
+    });
+
+    // Close modal on background click
+    document.getElementById('modal').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modal')) {
+        document.getElementById('modal').classList.add('hidden');
+      }
+    });
+
+    // --- Handle reservation form submission ---
+    document.getElementById('reservation-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msgEl = document.getElementById('reservation-message');
+
+      const data = {
+        car_id: document.getElementById('car-id').value,
+        customer_name: document.getElementById('customer-name').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        start_date: document.getElementById('start-date').value,
+        end_date: document.getElementById('end-date').value,
+      };
+
+      try {
+        const response = await fetch(`${API}/api/reservations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          msgEl.textContent = '✅ Reservation confirmed!';
+          msgEl.className = 'message success';
+          document.getElementById('reservation-form').classList.add('hidden');
+        } else {
+          msgEl.textContent = '❌ ' + (result.error || 'Something went wrong');
+          msgEl.className = 'message error';
+        }
+        msgEl.classList.remove('hidden');
+      } catch (err) {
+        msgEl.textContent = '❌ Network error. Please try again.';
+        msgEl.className = 'message error';
+        msgEl.classList.remove('hidden');
+        console.error(err);
+      }
+    });
+
+    // --- Utility: Escape HTML to prevent XSS ---
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // --- Start ---
+    loadCars();
+  </script>
+
+</body>
+</html>

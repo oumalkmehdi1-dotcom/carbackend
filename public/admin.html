@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Car Rental — Admin Panel</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-brand">🚗 Car Rental</div>
+    <div class="nav-links">
+      <a href="/">Browse Cars</a>
+      <a href="/admin.html" class="active">Admin Panel</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h1>Admin Panel</h1>
+    <p class="subtitle">Manage cars and view reservations</p>
+
+    <!-- ============================================ -->
+    <!-- Section 1: Add a New Car                     -->
+    <!-- ============================================ -->
+    <section class="admin-section">
+      <h2>➕ Add a New Car</h2>
+      <form id="add-car-form" class="inline-form" enctype="multipart/form-data">
+        <div class="form-group">
+          <label for="brand">Brand</label>
+          <input type="text" id="brand" placeholder="e.g. Toyota" required maxlength="50">
+        </div>
+        <div class="form-group">
+          <label for="model">Model</label>
+          <input type="text" id="model" placeholder="e.g. Corolla" required maxlength="50">
+        </div>
+        <div class="form-group">
+          <label for="image">Car Image</label>
+          <input type="file" id="image" accept="image/jpeg,image/png,image/gif,image/webp">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Car</button>
+      </form>
+      <div id="car-message" class="message hidden"></div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- Section 2: All Cars                          -->
+    <!-- ============================================ -->
+    <section class="admin-section">
+      <h2>🚗 All Cars (<span id="car-count">0</span>)</h2>
+      <div id="cars-table-container">
+        <p class="loading">Loading cars...</p>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- Section 3: All Reservations                  -->
+    <!-- ============================================ -->
+    <section class="admin-section">
+      <h2>📋 All Reservations (<span id="reservation-count">0</span>)</h2>
+      <div id="reservations-table-container">
+        <p class="loading">Loading reservations...</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ============================================================
+    // Admin Interface — Manage Cars & View Reservations
+    // ============================================================
+
+    const API = '';
+
+    // --- Load all cars ---
+    async function loadCars() {
+      const container = document.getElementById('cars-table-container');
+      try {
+        const response = await fetch(`${API}/api/cars`);
+        const cars = await response.json();
+        document.getElementById('car-count').textContent = cars.length;
+
+        if (cars.length === 0) {
+          container.innerHTML = '<p class="empty">No cars yet. Add one above!</p>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Image</th>
+                <th>Brand</th>
+                <th>Model</th>
+                <th>Added</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${cars.map(car => `
+                <tr>
+                  <td>${car.id}</td>
+                  <td>
+                    ${car.image_url 
+                      ? `<img class="table-thumb" src="${escapeHtml(car.image_url)}" alt="${escapeHtml(car.brand)}">`
+                      : `<span class="no-image">🚗</span>`
+                    }
+                  </td>
+                  <td>${escapeHtml(car.brand)}</td>
+                  <td>${escapeHtml(car.model)}</td>
+                  <td>${new Date(car.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCar(${car.id})">Delete</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        container.innerHTML = '<p class="error">Failed to load cars.</p>';
+        console.error(err);
+      }
+    }
+
+    // --- Load all reservations ---
+    async function loadReservations() {
+      const container = document.getElementById('reservations-table-container');
+      try {
+        const response = await fetch(`${API}/api/reservations`);
+        const reservations = await response.json();
+        document.getElementById('reservation-count').textContent = reservations.length;
+
+        if (reservations.length === 0) {
+          container.innerHTML = '<p class="empty">No reservations yet.</p>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Customer</th>
+                <th>Phone</th>
+                <th>Car</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Booked</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${reservations.map(r => `
+                <tr>
+                  <td>${r.id}</td>
+                  <td>${escapeHtml(r.customer_name)}</td>
+                  <td>${escapeHtml(r.phone)}</td>
+                  <td>${escapeHtml(r.brand)} ${escapeHtml(r.model)}</td>
+                  <td>${r.start_date}</td>
+                  <td>${r.end_date}</td>
+                  <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <button class="btn btn-danger btn-sm" onclick="deleteReservation(${r.id})">Cancel</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        container.innerHTML = '<p class="error">Failed to load reservations.</p>';
+        console.error(err);
+      }
+    }
+
+    // --- Add car form (with image upload via FormData) ---
+    document.getElementById('add-car-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msgEl = document.getElementById('car-message');
+      const brand = document.getElementById('brand').value.trim();
+      const model = document.getElementById('model').value.trim();
+      const imageInput = document.getElementById('image');
+
+      // Build FormData (supports file upload)
+      const formData = new FormData();
+      formData.append('brand', brand);
+      formData.append('model', model);
+      if (imageInput.files[0]) {
+        formData.append('image', imageInput.files[0]);
+      }
+
+      try {
+        const response = await fetch(`${API}/api/cars`, {
+          method: 'POST',
+          body: formData, // No Content-Type header — browser sets it with boundary
+        });
+        const result = await response.json();
+
+        if (response.ok) {
+          msgEl.textContent = `✅ Added: ${result.brand} ${result.model}`;
+          msgEl.className = 'message success';
+          document.getElementById('add-car-form').reset();
+          loadCars(); // Refresh list
+        } else {
+          msgEl.textContent = '❌ ' + (result.error || 'Failed to add car');
+          msgEl.className = 'message error';
+        }
+        msgEl.classList.remove('hidden');
+        setTimeout(() => msgEl.classList.add('hidden'), 3000);
+      } catch (err) {
+        msgEl.textContent = '❌ Network error';
+        msgEl.className = 'message error';
+        msgEl.classList.remove('hidden');
+        console.error(err);
+      }
+    });
+
+    // --- Delete a car ---
+    async function deleteCar(id) {
+      if (!confirm('Are you sure you want to delete this car? Related reservations will also be deleted.')) {
+        return;
+      }
+      try {
+        const response = await fetch(`${API}/api/cars/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+          loadCars();
+          loadReservations(); // Refresh both since cascade delete
+        } else {
+          const result = await response.json();
+          alert(result.error || 'Failed to delete car');
+        }
+      } catch (err) {
+        alert('Network error');
+        console.error(err);
+      }
+    }
+
+    // --- Delete a reservation ---
+    async function deleteReservation(id) {
+      if (!confirm('Cancel this reservation?')) return;
+      try {
+        const response = await fetch(`${API}/api/reservations/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+          loadReservations();
+        } else {
+          const result = await response.json();
+          alert(result.error || 'Failed to cancel reservation');
+        }
+      } catch (err) {
+        alert('Network error');
+        console.error(err);
+      }
+    }
+
+    // --- Utility: Escape HTML ---
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // --- Start ---
+    loadCars();
+    loadReservations();
+  </script>
+
+</body>
+</html>

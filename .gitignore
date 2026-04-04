@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Database file (created automatically)
+carrental.db
+
+# Environment variables
+.env
+
+# Deploy artifacts
+deploy.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
